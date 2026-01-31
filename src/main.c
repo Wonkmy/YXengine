@@ -105,9 +105,7 @@ int main(void)
     {
         BeginDrawing();
         ClearBackground(BLACK);
-        // DraggablePanel(&windowsRects->rect, "MySkill");
         for (int i = 0; i < windows.count; i++) {
-            if (!windows.data[i].visible) continue;
             if (windows.data[i].visible == 0) {
                 DraggablePanel(&windows.data[i].rect,i,"MySkill");
             }
