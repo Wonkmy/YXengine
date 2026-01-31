@@ -6,14 +6,30 @@
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 #include "cJSON.h"
+
+
+
 Rectangle MyRectangle(int x,int y,int width,int height);
 void LoadLua();
 void DraggablePanel(Rectangle* rect, const char* title);
+void CreateLualib();
+int TestWindow();
+int close = -1;
+lua_State *L = NULL;
+
+static const luaL_Reg tab_funcs[] = {
+    {"testwindow", TestWindow},
+    {NULL, NULL}
+};
+int luaopen_window (lua_State *L);
+
 int main(void)
 {
     InitWindow(1280, 720, "MyGame");
+    L = luaL_newstate();
+    LoadLua();
     // Texture2D texture = LoadTexture("assets/test.png");
-    // LoadLua();
+
     // 带数组对象的json数据解析方式：
     // char *jsonText = LoadFileText("config.json");
     // cJSON *root = cJSON_Parse(jsonText);
@@ -49,19 +65,26 @@ int main(void)
     //     printf("window title %s\n",title);
     // }
     Rectangle panelRect = MyRectangle(0,0,200,200);
+
     while (!WindowShouldClose())
     {
         BeginDrawing();
         ClearBackground(BLACK);
-        GuiPanel(MyRectangle(0,0,200,200),"MySkill");
         // DrawTexture(texture,0,0,WHITE);
+        if (close == 0) {
+            DraggablePanel(&panelRect, "MySkill");
+        }
 
-        DraggablePanel(&panelRect, "MySkill");
         EndDrawing();
     }
     // UnloadTexture(texture);
     // UnloadFileText(jsonText);
     CloseWindow();
+    return 0;
+}
+int TestWindow() {
+    // printf("%s\n","testwindow:success!!");
+    close = 0;
     return 0;
 }
 void DraggablePanel(Rectangle* rect, const char* title)
@@ -99,13 +122,26 @@ void DraggablePanel(Rectangle* rect, const char* title)
             dragging = false;
         }
     }
+    close = GuiWindowBox(*rect, title);
+    int btnX = 50;
+    int btnY = 50;
+    Rectangle btn_rect = {rect->x + btnX,rect->y + btnY,80,30};
+    GuiButton(btn_rect,"OpenSkill");
+}
 
-    GuiPanel(*rect, title);
+void CreateLualib() {
+    luaL_requiref(L, "gamewindow", luaopen_window, 1);
+    lua_pop(L, 1);  /* remove lib */
+}
+int luaopen_window (lua_State *L) {
+    luaL_newlib(L, tab_funcs);
+    return 1;
 }
 
 void LoadLua() {
-    lua_State *L = luaL_newstate();
+
     luaL_openlibs(L);
+    CreateLualib();
     // luaL_setmetatable(L,"main_texture");
     luaL_dofile(L,"main.lua");
     lua_getglobal(L,"onLoad");
