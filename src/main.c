@@ -7,91 +7,121 @@
 #include "raygui.h"
 #include "cJSON.h"
 
+typedef struct {
+    Rectangle rect;
+    int visible;
+}WindowInfo;
 
+typedef struct {
+    WindowInfo* data;
+    int count;
+    int capacity;
+} WindowList;
 
 Rectangle MyRectangle(int x,int y,int width,int height);
-void LoadLua();
-void DraggablePanel(Rectangle* rect, const char* title);
+void LoadLua(lua_State *L);
+void DraggablePanel(Rectangle* rect,int index, const char* title);
 void CreateLualib();
-int TestWindow();
 int close = -1;
-lua_State *L = NULL;
+
+WindowList windows;
+int lastRectIndex = 0;
+static int draggingIndex = -1;
+static Vector2 dragOffset = {0};
+static int openWindow(lua_State *L) {
+    // printf("%s\n","testwindow:success!!");
+    close = 0;
+    return 0;
+}
+
+static void WindowList_Init(WindowList* list)
+{
+    list->count = 0;
+    list->capacity = 4;
+    list->data = malloc(sizeof(WindowInfo) * list->capacity);
+}
+static void WindowList_Add(WindowList* list, WindowInfo w)
+{
+    if (list->count >= list->capacity)
+    {
+        list->capacity *= 2;
+        list->data = realloc(list->data,
+            sizeof(WindowInfo) * list->capacity);
+    }
+
+    list->data[list->count++] = w;
+}
+void WindowList_BringToFront(WindowList* list, int index)
+{
+    if (index < 0 || index >= list->count) return;
+
+    WindowInfo temp = list->data[index];
+
+    for (int i = index; i < list->count - 1; i++)
+    {
+        list->data[i] = list->data[i + 1];
+    }
+
+    list->data[list->count - 1] = temp;
+}
+
+static int createWindow(lua_State *L) {
+    int x = luaL_checkinteger(L, 1);
+    int y = luaL_checkinteger(L, 2);
+    int w = luaL_checkinteger(L, 3);
+    int h = luaL_checkinteger(L, 4);
+    int visible = luaL_checkinteger(L, 5);
+    Rectangle panelRect = MyRectangle(x,y,w,h);
+
+    WindowList_Add(&windows, (WindowInfo){
+        .rect = panelRect,
+        .visible = visible
+    });
+    return 0;
+}
+
 
 static const luaL_Reg tab_funcs[] = {
-    {"testwindow", TestWindow},
+    {"createwindow", createWindow},
+    {"openwindow", openWindow},
     {NULL, NULL}
 };
-int luaopen_window (lua_State *L);
+static int luaopen_window (lua_State *L) {
+    luaL_newlib(L, tab_funcs);
+    return 1;
+}
 
 int main(void)
 {
     InitWindow(1280, 720, "MyGame");
-    L = luaL_newstate();
-    LoadLua();
-    // Texture2D texture = LoadTexture("assets/test.png");
 
-    // 带数组对象的json数据解析方式：
-    // char *jsonText = LoadFileText("config.json");
-    // cJSON *root = cJSON_Parse(jsonText);
-    //
-    // cJSON *window = cJSON_GetObjectItem(root, "window");
-    // cJSON *content = cJSON_GetObjectItem(window, "content");
-    //
-    // int count = cJSON_GetArraySize(content);
-    //
-    // for (int i = 0; i < count; i++)
-    // {
-    //     cJSON *item = cJSON_GetArrayItem(content, i);
-    //
-    //     int id = cJSON_GetObjectItem(item, "id")->valueint;
-    //     const char *name =
-    //         cJSON_GetObjectItem(item, "name")->valuestring;
-    //
-    //     printf("content[%d]: id=%d, name=%s\n", i, id, name);
-    // }
-    //
-    // cJSON_Delete(root);
-    // UnloadFileText(jsonText);
-    // 读取json文件，不带数组对象
-    // char *jsonText = LoadFileText("assets/config.json");
-    // cJSON *root = cJSON_Parse(jsonText);
-    // if (root)
-    // {
-    //     cJSON *window = cJSON_GetObjectItem(root, "window");
-    //
-    //     int width  = cJSON_GetObjectItem(window, "width")->valueint;
-    //     int height = cJSON_GetObjectItem(window, "height")->valueint;
-    //     const char *title = cJSON_GetObjectItem(window, "title")->valuestring;
-    //     printf("window title %s\n",title);
-    // }
-    Rectangle panelRect = MyRectangle(0,0,200,200);
+
+    WindowList_Init(&windows);
+
+    lua_State* L = luaL_newstate();
+    LoadLua(L);
 
     while (!WindowShouldClose())
     {
         BeginDrawing();
         ClearBackground(BLACK);
-        // DrawTexture(texture,0,0,WHITE);
-        if (close == 0) {
-            DraggablePanel(&panelRect, "MySkill");
+        // DraggablePanel(&windowsRects->rect, "MySkill");
+        for (int i = 0; i < windows.count; i++) {
+            if (!windows.data[i].visible) continue;
+            if (windows.data[i].visible == 0) {
+                DraggablePanel(&windows.data[i].rect,i,"MySkill");
+            }
         }
 
         EndDrawing();
     }
-    // UnloadTexture(texture);
-    // UnloadFileText(jsonText);
+    free(windows.data);
     CloseWindow();
     return 0;
 }
-int TestWindow() {
-    // printf("%s\n","testwindow:success!!");
-    close = 0;
-    return 0;
-}
-void DraggablePanel(Rectangle* rect, const char* title)
-{
-    static bool dragging = false;
-    static Vector2 dragOffset = { 0 };
 
+void DraggablePanel(Rectangle* rect,int index, const char* title)
+{
     Rectangle titleBar = {
         rect->x,
         rect->y,
@@ -102,15 +132,18 @@ void DraggablePanel(Rectangle* rect, const char* title)
     // 标题栏点击
     if (CheckCollisionPointRec(GetMousePosition(), titleBar))
     {
+        lastRectIndex = index;
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
-            dragging = true;
+            WindowList_BringToFront(&windows, index);
+
+            draggingIndex = windows.count - 1; // 新索引
             dragOffset.x = GetMouseX() - rect->x;
             dragOffset.y = GetMouseY() - rect->y;
         }
     }
 
-    if (dragging)
+    if (draggingIndex == index)
     {
         if (IsMouseButtonDown(MOUSE_LEFT_BUTTON))
         {
@@ -119,37 +152,29 @@ void DraggablePanel(Rectangle* rect, const char* title)
         }
         else
         {
-            dragging = false;
+            draggingIndex = -1;
         }
     }
-    close = GuiWindowBox(*rect, title);
+
+    windows.data[index].visible = GuiWindowBox(*rect, title);
     int btnX = 50;
     int btnY = 50;
     Rectangle btn_rect = {rect->x + btnX,rect->y + btnY,80,30};
     GuiButton(btn_rect,"OpenSkill");
 }
 
-void CreateLualib() {
-    luaL_requiref(L, "gamewindow", luaopen_window, 1);
+void CreateLualib(lua_State *L) {
+    luaL_requiref(L, "gamewindow", luaopen_window, 1);// gamewindow代表库名: 即lua代码中的：require "xxx"的时候用的
     lua_pop(L, 1);  /* remove lib */
 }
-int luaopen_window (lua_State *L) {
-    luaL_newlib(L, tab_funcs);
-    return 1;
-}
 
-void LoadLua() {
 
-    luaL_openlibs(L);
-    CreateLualib();
-    // luaL_setmetatable(L,"main_texture");
-    luaL_dofile(L,"main.lua");
-    lua_getglobal(L,"onLoad");
-    int bb = lua_pcall(L,0,1,0);
-    const char* cc = lua_tostring(L,bb);
-
-    printf("%s\n",cc);
-
+void LoadLua(lua_State *L) {
+    luaL_openlibs(L);// 加载官方lua库
+    CreateLualib(L);// 加载自定义lua库
+    luaL_dofile(L,"main.lua");// 执行main.lua文件
+    lua_getglobal(L,"onLoad");// 获取全局lua函数 "onLoad"，并压栈。写在main.lua中的，目前没有限定必须在main.lua中，理论上可以在任何地方，后面实现功能
+    lua_pcall(L,0,0,0);// 执行栈顶的onLoad函数，这个方法：lua_pcall会执行栈顶的函数
     lua_close(L);
 }
 Rectangle MyRectangle(int x,int y,int width,int height) {
