@@ -758,7 +758,9 @@ LUA_API int lua_rawgetp (lua_State *L, int idx, const void *p) {
   return finishrawget(L, luaH_get(t, &k));
 }
 
-
+/*
+ *  创建一张新表
+ */
 LUA_API void lua_createtable (lua_State *L, int narray, int nrec) {
   Table *t;
   lua_lock(L);

@@ -4,7 +4,8 @@ set(CMAKE_C_STANDARD 99)
 
 file(GLOB_RECURSE SOURCES ${CMAKE_SOURCE_DIR}/src/*.c)
 
-add_executable(rayEngine ${SOURCES})
+add_executable(rayEngine ${SOURCES}
+        include/lua_global_func_register.h)
 target_include_directories(rayEngine PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/include/game
