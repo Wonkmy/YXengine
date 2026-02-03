@@ -308,6 +308,7 @@ LUALIB_API int luaL_execresult (lua_State *L, int stat) {
 /*
 ** {======================================================
 ** Userdata's metatable manipulation
+** 用户数据的元表操作
 ** =======================================================
 */
 
